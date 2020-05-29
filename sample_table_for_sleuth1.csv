@@ -1,0 +1,15 @@
+path,sample,data_description,gastrula_state
+./kallisto_output/output_SRR8863027,SRR8863027,48hpf(15C),after_gastrula
+./kallisto_output/output_SRR531853,SRR531853,sea urchin embryos 24hpf,after_gastrula
+./kallisto_output/output_SRR8863028,SRR8863028,40hpf (15C),after_gastrula
+./kallisto_output/output_SRR8863029,SRR8863029,41hpf (15C),after_gastrula
+./kallisto_output/output_SRR8863030,SRR8863030,2 cell stage,before_gastrula
+./kallisto_output/output_SRR8863031,SRR8863031,4 cell stage,before_gastrula
+./kallisto_output/output_SRR8863032,SRR8863032,unfertilized egg,before_gastrula
+./kallisto_output/output_SRR8863033,SRR8863033,1 cell stage,before_gastrula
+./kallisto_output/output_SRR8863034,SRR8863034,32 cell stage,before_gastrula
+./kallisto_output/output_SRR8863035,SRR8863035,64 cell stage,before_gastrula
+./kallisto_output/output_SRR8863036,SRR8863036,8 cell stage,before_gastrula
+./kallisto_output/output_SRR8863037,SRR8863037,16 cell stage,before_gastrula
+./kallisto_output/output_SRR8863038,SRR8863038,128 cell stage,before_gastrula
+./kallisto_output/output_SRR8863039,SRR8863039,24hpf(15C),after_gastrula
