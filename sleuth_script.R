@@ -38,7 +38,7 @@ ggsave("loads1.png", loads1)
 print(loads1$data)
 loads2 <- plot_loadings(so, units = 'tpm', pc_input = 2, pc_count = 20)
 ggsave("loads2.png", loads2)
-print(laods2$data)
+print(loads2$data)
 
 # Creating table with interesting result
 sleuth_table <- sleuth_results(so, test = 'gastrula_statebefore_gastrula', test_type = "wt", which_model = "full", show_all = FALSE)
