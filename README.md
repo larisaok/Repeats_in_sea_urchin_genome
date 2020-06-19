@@ -35,3 +35,5 @@ PCA plot illustrates that experimental points from embryos before and after gast
 ![Volcano plot](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/volcano_plot.png) 
 Volcano plot shows that majority of transcripts change their expression after gastrulation.
 
+The RE that entered the top 20 elements of the first three components in the analysis of the main components were included in the list of interesting RE. We also selected the top 200 transcripts, the expression of which changed during gastrulation, and selected RE among them, which were also included in the list of interesting ones. This [list](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/interestingRE.txt) of interesting RE() was proposed for analysis by wet-lab methods. It is assumed that these RE can affect the processes of embryonic development of the sea urchin by changing gene expression. The mechanism of influence may include heterochromatin formation or an RNA-mediated interference pathway and should be futher investigated in experiments.
+
