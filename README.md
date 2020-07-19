@@ -1,5 +1,7 @@
 # Analysis of repetitive elements transcription during embryogenesis of sea urchin *Strongylocentrotus purpuratus*
 
+Okorokova Larisa, student of the Bioinformatics Institute, St. Petersburg, Nikolay Panyushev, research adviser, Leonid Adonin, PI
+
 ## Introduction
 Repetitive elements (RE) occupy significant part of eukaryotic genomes and some of them are shown to play diverse roles in genome regulation. For example, they are implied to be the origins of non-coding RNA. During embryogenesis of the sea urchin, a significant number of RE are expressed (up to 80%). The role of these elements in the regulation of biological processes remains unknown.
 
