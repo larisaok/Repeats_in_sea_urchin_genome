@@ -14,8 +14,11 @@ The aim of this study was to identify the RE in the genome of the purple sea urc
 3. Reference transcriptome assembling which includes RE and previously annotated genes.
 4. Quantification of transcripts abundances using Kallisto.
 5. Statistical analysis in Sleuth.
+6. Identifing active RE
+7. Primary analysis of scRNAseq (including RE expression)
+8. Secondary analysis of scRNAseq in R (see scrnaseq directory)
 
-Detailed description of steps 1-4 can be found in [lab notebook](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/lab_notebook.md)
+Detailed description of steps 1-4, 6-7 can be found in [lab notebook](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/lab_notebook.md)
 Step 5 description can be found in [sleuth_script](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/sleuth_script.R)
 
 ## RNA-seq data
@@ -28,14 +31,4 @@ RNA-seq data of *S. purpuratus* embryos on different stages were obtained from S
 * kallisto version 0.46.0 can be found [here](https://pachterlab.github.io/kallisto/starting)
 * sleuth R package v0.30.0 ([conda package](https://anaconda.org/bioconda/r-sleuth))
 
-## Results
-
-For example,
-![PCA](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/pca.png) 
-PCA plot illustrates that experimental points from embryos before and after gastrulation are grouped together, suggesting that pregastrulation stages shows higher similarity.
-
-![Volcano plot](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/volcano_plot.png) 
-Volcano plot shows that majority of transcripts change their expression after gastrulation.
-
-The RE that entered the top 20 elements of the first three components in the analysis of the main components were included in the list of interesting RE. We also selected the top 200 transcripts, the expression of which changed during gastrulation, and selected RE among them, which were also included in the list of interesting ones. This [list](https://github.com/larisaok/Repeats_in_sea_urchin_genome/blob/master/interestingRE.txt) of interesting RE was proposed for analysis by wet-lab methods. It is assumed that these RE can affect the processes of embryonic development of the sea urchin by changing gene expression. The mechanism of influence may include heterochromatin formation or an RNA-mediated interference pathway and should be futher investigated in experiments.
 

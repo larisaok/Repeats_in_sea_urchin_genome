@@ -19,49 +19,10 @@ nohup RepeatMasker -pa 8 -lib urchin-families.fa -nolow -no_is Spur.fna & # 13 h
 
 ```
 
-## Getting gff file of repetitive elements
-
-```bash
-cd /opt/RepeatMasker
-wget http://www.repeatmasker.org/utils/rmOutToGFF3.pl
-chmod +x rmOutToGFF3.pl
-cd ~/urchin
-perl /opt/RepeatMasker/rmOutToGFF3.pl Spur.fna.out > transposons.gff
-```
-
-## Gff grooming
-
-```bash
-awk '{FS="\t"; OFS="\t"} {print}' transposons.gff | perl -pe 's/\ .*//' > clear_transposons.gff
-awk '{FS="\t"; OFS="\t"} {print $1, $2, $9, $4, $5, $6, $7, $8, $3}' clear_transposons.gff > replased_transposons.gff
-```
-
-## Converting replased_transposon.gff to fasta
-
-```bash
-nohup bedtools getfasta -fi Spur.fna -bed replased_transposons.gff -name -s &> transposons_fasta &
-```
-
-## Cutting useless features from genome gff
-
-```bash
-
-sed '/tRNA/d' GCF_000002235.5_Spur_5.0_genomic.gff > cut_annot # get rid of tRNA
-sed '/rRNA/d' cut_annot > cut_annot2 # get rid of rRNA
-sed '/tandem_repeat/d' cut_annot2 > cut_annot3 # get rid of tandem repeats
-awk -F"\t" '!seen[$4, $5]++' cut_annot3 > cut_annot4 # get rid of features with the same coordinates
-```
-
-## Converting gff to CDS multifasta
-
-```bash
-nohup bedtools getfasta -fi Spur.fna.masked -bed cut_annotation -name -s &> genes_fasta &
-```
-
 ## Merging CDS fasta and repeat fasta files
 
 ```bash
-cat transposons_fasta genes_fasta > combined_fasta.fa
+cat urchin-families.fa GCF_000002235.5_Spur_5.0_rna.fna > combined_fasta.fa
 ```
 
 ## Downloading RNA-seq data (dataset1)
@@ -89,7 +50,7 @@ chmod +x fastqc.sh
 nohup ./fastqc.sh &> fastqc.log &
 ```
 
-## Kallisto running
+## Kallisto running for bulk RNAseq quantification
 
 ```bash
 # index building (8 CPU, 120 Gb memory, took about 4 hours to complete)
@@ -105,3 +66,24 @@ do
   echo
 done
 ```
+
+## TEcandidates
+
+```bash
+TEcandidates.sh -t=32 -r=32 -c=1 -l=20 -te=Spur_repeats.gff3 -g=Spur_5.0.fa -fq=. -m=PE -N=10000 1> TEcandidates_urchin.log 2> TEcandidates_urchin.err
+```
+
+## Kallisto bustools 
+
+```bash
+bedtools getfasta -fi Spur_5.0.fa -bed expressed_RE.gff3 -split -s -name -fo expressed_repeats.fa
+cat GCF_000002235.5_Spur_5.0_rna.fna expressed_repeats.fa > Genes+repeats.fa
+kallisto index -i Genes_repeats Genes+repeats.fa
+
+for i in SRR11599813 SRR11599814 SRR11599815 SRR11599816 SRR11599817 SRR11599818 SRR11599819 SRR11599820 SRR11599821 SRR11599822 SRR11599823 SRR11599824
+do
+  mkdir "$i"_out
+  kb count -i Genes_repeats.idx -g tr2g.tsv -x 10xv3 -t 16 -o "$i"_out --mm $i* &> $i.log
+done
+```
+
