@@ -1,0 +1,335 @@
+---
+title: "Urchin single-cell"
+author: "Nick_Panyushev"
+date: "3/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#BiocManager::install(c('multtest', "DropletUtils"), Ncpus = 7)
+#BiocManager::install("MAST", Ncpus = 7)
+#install.packages("irlba")
+#install.packages("scico")
+#install.packages("Seurat")
+#install.packages("DropletUtils")
+#install.packages("tidyverse")
+#install.packages("ggpointdensity")
+#install.packages("scales")
+#install.packages("hexbin")
+
+setwd("~/Urchin_projects/Spur_single-cell/")
+library(hexbin)
+library(stringr)
+library(Matrix)
+library(irlba)
+library(scico)
+library(Seurat)
+library(DropletUtils)
+library(tidyverse)
+library(ggpointdensity)
+library(scales)
+library(MAST)
+theme_set(theme_bw())
+source("SC_functions.R")
+```
+
+```{r Load raw data, eval=TRUE}
+load("raw_data.RData")
+```
+
+```{r Read_matrices, warning=F, message=FALSE, results='hide'}
+# Read in the count matrix that was output by `kb`.
+ifelse(!exists("cells_8"), cells_8  <- read_count_output("SRR11599813_out/counts_unfiltered/cells_x_genes.mtx"), TRUE) 
+ifelse(!exists("cells_64"), cells_64 <- read_count_output("SRR11599814_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("morula"), morula <- read_count_output("SRR11599815_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("early_blastula"), early_blastula <- read_count_output("SRR11599816_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("hatched_blastula_1"), hatched_blastula_1 <- read_count_output("SRR11599817_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("hatched_blastula_2"), hatched_blastula_2 <- read_count_output("SRR11599818_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("mesenchyme_blastula_1"), mesenchyme_blastula_1 <- read_count_output("SRR11599819_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("mesenchyme_blastula_2"), mesenchyme_blastula_2 <- read_count_output("SRR11599820_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("early_gastrula_1"), early_gastrula_1 <- read_count_output("SRR11599821_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("early_gastrula_2"), early_gastrula_2 <- read_count_output("SRR11599822_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("late_gastrula_1"), late_gastrula_1 <- read_count_output("SRR11599823_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+ifelse(!exists("late_gastrula_2"), late_gastrula_2 <- read_count_output("SRR11599824_out/counts_unfiltered/cells_x_genes.mtx"), TRUE)
+```
+
+```{r save raw data, eval=FALSE}
+save(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2,
+     file = "raw_data.RData")
+```
+
+
+```{r QC_PCA, cache=TRUE}
+library(data.table, quietly = T)
+if (!file.exists("QC_results.tsv")){
+  tmp_list <- qc_pca(c(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2))
+
+  names(tmp_list) <- c("cells_8", "cells_64", "morula",
+       "early_blastula",
+       "hatched_blastula_1", "hatched_blastula_2", 
+       "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+       "early_gastrula_1", "early_gastrula_2", 
+       "late_gastrula_1", "late_gastrula_2")
+  QC_pca <- bind_rows(tmp_list, .id = "id")
+  fwrite(QC_pca, "QC_results.tsv", sep = "\t")
+  rm(tmp_list)
+}else{
+  QC_pca <- fread("QC_results.tsv")
+}
+QC_pca$id <- factor(QC_pca$id, levels = c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2"))
+```
+
+```{r QC_pca b/w plots}
+# Plot the cells in the 2D PCA projection
+ggplot(QC_pca, aes(PC1, PC2)) +
+  geom_point(alpha = 0.1, size = 0.5) + 
+  facet_wrap(~id, ncol = 4)
+
+#ggsave("pca_qc.png", dpi = "retina", width = 32, height = 18, units = "cm")
+```
+
+
+```{r QC_pca plot colored}
+ggplot(QC_pca, aes(PC1, PC2)) +
+  geom_bin2d(bins = 50) +
+  scale_fill_scico(palette = "devon", direction = -1, end = 0.95) +
+  facet_wrap(~id, ncol = 4)
+
+#ggsave("pca_devon.png", dpi = "retina", width = 32, height = 18, units = "cm")
+```
+
+```{r gene_number plots}
+tmp_list <- qc_gene_num(c(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2))
+
+names(tmp_list) <- c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2")
+
+Genes_number <- bind_rows(tmp_list, .id = "id")
+Genes_number$id <- factor(QC_pca$id, levels = c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2"))
+
+rm(tmp_list)
+
+ggplot(Genes_number, aes(nCount, nGene)) +
+  geom_bin2d(bins = 50) +
+  scale_fill_scico(palette = "devon", direction = -1, end = 0.95) +
+  scale_x_log10() + scale_y_log10() + annotation_logticks() +
+  labs(x = "Total UMI counts", y = "Number of genes detected") + 
+  facet_wrap(~id, ncol = 4)
+
+
+#ggsave("genes_number.png", dpi = "retina", width = 32, height = 18, units = "cm")
+```
+
+```{r knee_plots}
+
+knee_tbl <- knee_plot(c(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2))
+
+names(knee_tbl) <- c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2")
+
+knee_tbl <- bind_rows(knee_tbl, .id = "id")
+
+knee_tbl$id <- factor(knee_tbl$id, levels = c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2"))
+
+
+ggplot(knee_tbl, aes(total, rank)) +
+   geom_rect(data = knee_tbl, 
+            aes(xmin = inflection, ymin = 0,
+            xmax = max(total),
+            ymax = rank_cutoff),
+            fill = "springgreen2",
+            alpha = 0.1,
+            color = NA) +
+  geom_line() +
+  geom_hline(aes(yintercept = rank_cutoff), linetype = 2) +
+  geom_vline(aes(xintercept = inflection), linetype = 2) +
+  scale_x_log10() +
+  scale_y_log10() +
+  annotation_logticks() +
+  labs(y = "Rank", x = "Total UMIs") +
+  facet_wrap(~id, ncol = 4)
+  
+#ggsave("knee_plots_rect.png", dpi = "retina", width = 32, height = 18, units = "cm")
+```
+
+```{r stats before knee filtering}
+before_inflection <- sapply(c(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2), ncol)
+names(before_inflection) <- c("cells_8", "cells_64", "morula",
+     "early_blastula",
+     "hatched_blastula_1", "hatched_blastula_2", 
+     "mesenchyme_blastula_1", "mesenchyme_blastula_2", 
+     "early_gastrula_1", "early_gastrula_2", 
+     "late_gastrula_1", "late_gastrula_2")
+```
+
+```{r inflection filtering}
+cells_8 <- knee_filter(cells_8)
+cells_64 <- knee_filter(cells_64)
+morula <- knee_filter(morula)
+early_blastula <- knee_filter(early_blastula)
+hatched_blastula_1 <- knee_filter(hatched_blastula_1)
+hatched_blastula_2 <- knee_filter(hatched_blastula_2)
+early_gastrula_1 <- knee_filter(early_gastrula_1)
+early_gastrula_2 <- knee_filter(early_gastrula_2)
+mesenchyme_blastula_1 <- knee_filter(mesenchyme_blastula_1)
+mesenchyme_blastula_2 <- knee_filter(mesenchyme_blastula_2)
+late_gastrula_1 <- knee_filter(late_gastrula_1)
+late_gastrula_2 <- knee_filter(late_gastrula_2)
+```
+
+```{r inflection_stats}
+after_inflection <- sapply(c(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2), ncol)
+
+infl_stats <- data.table(dataset = names(before_inflection), 
+                         before = before_inflection,
+                         after = after_inflection)
+infl_stats[ , percentage_loss := round(((before - after)/before * 100), digits = 2)]
+rm(after_inflection, before_inflection)
+print(infl_stats)
+```
+
+
+```{r genes annotation}
+library(data.table)
+tr2g <- fread("tr2g.tsv", sep = "\t", fill = T)
+tr2g$V3 <- tr2g$V4 <- tr2g$V2 <- NULL
+names(tr2g) <- c("transcript", "info")
+tr2g$mito <- "no"
+tr2g[grepl(" mitochondrial ", info), mito := "yes"]
+tr2g$gene_name <- sub(".*\\(", "", tr2g$info)
+tr2g$gene_name <- sub("\\).*", "", tr2g$gene_name)
+tr2g[info == "", gene_name := transcript]
+
+transcript_variants <- tr2g[duplicated(tr2g$gene_name)]
+
+var_name <- sub(".*),", "", transcript_variants$info)
+var_name <- sub(" transcript variant ", "", var_name)
+var_name <- sub(", mRNA", "", var_name)
+var_name <- sub(" ", "", var_name)
+
+transcript_variants$gene_var <- paste(transcript_variants$gene_name, var_name, sep = ".")
+tr2g <- merge(tr2g, transcript_variants[, .(transcript, gene_var)], by = "transcript" , all = T)
+tr2g[is.na(gene_var), gene_var := gene_name]
+tr2g[mito == "yes", gene_var := paste("mt-", gene_var, sep = "")]
+rm(var_name)
+fwrite(tr2g, "tr2g_processed.tsv", sep = "\t")
+```
+
+
+```{r setting gene names, eval=F}
+rownames(cells_8) <- 
+  tr2g$gene_var[match(rownames(cells_8), tr2g$transcript)]
+
+rownames(cells_64) <- 
+  tr2g$gene_var[match(rownames(cells_64), tr2g$transcript)]
+
+rownames(morula) <- 
+  tr2g$gene_var[match(rownames(morula), tr2g$transcript)]
+
+rownames(early_blastula) <- 
+  tr2g$gene_var[match(rownames(early_blastula), tr2g$transcript)]
+
+rownames(hatched_blastula_1) <- 
+  tr2g$gene_var[match(rownames(hatched_blastula_1), tr2g$transcript)]
+
+rownames(hatched_blastula_2) <- 
+  tr2g$gene_var[match(rownames(hatched_blastula_2), tr2g$transcript)]
+
+rownames(mesenchyme_blastula_1) <- 
+  tr2g$gene_var[match(rownames(mesenchyme_blastula_1), tr2g$transcript)]
+
+rownames(mesenchyme_blastula_2) <- 
+  tr2g$gene_var[match(rownames(mesenchyme_blastula_2), tr2g$transcript)]
+     
+rownames(early_gastrula_1) <- 
+  tr2g$gene_var[match(rownames(early_gastrula_1), tr2g$transcript)]
+
+rownames(early_gastrula_2) <- 
+  tr2g$gene_var[match(rownames(early_gastrula_2), tr2g$transcript)]
+
+rownames(late_gastrula_1) <- 
+  tr2g$gene_var[match(rownames(late_gastrula_2), tr2g$transcript)]
+
+rownames(late_gastrula_2) <- 
+  tr2g$gene_var[match(rownames(late_gastrula_2), tr2g$transcript)]
+```
+
+```{r create Seurat objs}
+seu_8 <- CreateSeuratObject(cells_8, min.cells = 3, min.features = 200)
+seu_64 <- CreateSeuratObject(cells_64, min.cells = 3, min.features = 200)
+seu_morula <- CreateSeuratObject(morula, min.cells = 3, min.features = 200)
+seu_early_blastula <- CreateSeuratObject(early_blastula, min.cells = 3, min.features = 200) 
+seu_hatched_blastula_1 <- CreateSeuratObject(hatched_blastula_1, min.cells = 3, min.features = 200)
+seu_hatched_blastula_2 <- CreateSeuratObject(hatched_blastula_2, min.cells = 3, min.features = 200)
+seu_early_gastrula_1 <- CreateSeuratObject(early_gastrula_1, min.cells = 3, min.features = 200)
+seu_early_gastrula_2 <- CreateSeuratObject(early_gastrula_2, min.cells = 3, min.features = 200)
+seu_mesenchyme_blastula_1 <- CreateSeuratObject(mesenchyme_blastula_1, min.cells = 3, min.features = 200)
+seu_mesenchyme_blastula_2 <- CreateSeuratObject(mesenchyme_blastula_2, min.cells = 3, min.features = 200)
+seu_late_gastrula_1 <- CreateSeuratObject(late_gastrula_1, min.cells = 3, min.features = 200)
+seu_late_gastrula_2 <- CreateSeuratObject(late_gastrula_2, min.cells = 3, min.features = 200)
+```
+
+```{r some cleanup, message=F, warning=F, results='hide'}
+rm(cells_8, cells_64, morula,
+     early_blastula,
+     hatched_blastula_1, hatched_blastula_2, 
+     mesenchyme_blastula_1, mesenchyme_blastula_2, 
+     early_gastrula_1, early_gastrula_2, 
+     late_gastrula_1, late_gastrula_2)
+rm(Genes_number, knee_tbl, QC_pca, infl_stats) #We don't need them anymore
+rm(seu_8) #It is empty anyway
+gc(verbose = FALSE)
+```

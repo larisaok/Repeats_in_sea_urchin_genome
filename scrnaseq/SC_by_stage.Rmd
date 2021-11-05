@@ -1,0 +1,634 @@
+---
+title: "SC_by_stages"
+author: "Nick_Panyushev"
+date: "4/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#BiocManager::install(c('multtest', "DropletUtils"), Ncpus = 7)
+#BiocManager::install("MAST", Ncpus = 7)
+#install.packages("irlba")
+#install.packages("scico")
+#install.packages("Seurat")
+#install.packages("DropletUtils")
+#install.packages("tidyverse")
+#install.packages("ggpointdensity")
+#install.packages("scales")
+#install.packages("hexbin")
+
+setwd("~/Urchin_projects/Spur_single-cell/")
+library(hexbin)
+library(stringr)
+library(Matrix)
+library(irlba)
+library(scico)
+library(Seurat)
+library(DropletUtils)
+library(tidyverse)
+library(ggpointdensity)
+library(scales)
+library(MAST)
+library(data.table)
+theme_set(theme_bw())
+source("SC_functions.R")
+tr2g <- fread("tr2g_processed.tsv", sep = "\t", fill = T)
+```
+
+
+```{r joining datasets}
+if (!file.exists("seurat_stages.Rdata")){
+  load("Seurat_tranformed.RData")
+  seu_64$stage <- "64_cells"
+  seu_morula$stage <- "morula"
+  seu_early_blastula$stage <- "early_blastula"
+  seu_hatched_blastula_1$stage <- "hatched_blastula"
+  seu_hatched_blastula_2$stage <- "hatched_blastula"
+  seu_early_gastrula_1$stage <- "early_gastrula"
+  seu_early_gastrula_2$stage <- "early_gastrula"
+  seu_mesenchyme_blastula_1$stage <- "mesenchyme_blastula"
+  seu_mesenchyme_blastula_2$stage <- "mesenchyme_blastula"
+  seu_late_gastrula_1$stage <- "late_gastrula"
+  seu_late_gastrula_2$stage <- "late_gastrula"
+
+  hatched_blastula <- list(
+                 seu_hatched_blastula_1,
+                 seu_hatched_blastula_2)
+  mesenchyme_blastula <- list(
+                seu_mesenchyme_blastula_1,
+                seu_mesenchyme_blastula_2)
+  early_gastrula <- list(
+                seu_early_gastrula_1,
+                seu_early_gastrula_2)
+  
+  late_gastrula <- list(
+                seu_late_gastrula_1,
+                seu_late_gastrula_2)
+
+  
+  options(future.globals.maxSize= 8589934592)
+  features_hb <- SelectIntegrationFeatures(object.list = hatched_blastula, nfeatures = 2000)
+  hatched_blastula <- PrepSCTIntegration(object.list = hatched_blastula, anchor.features = features_hb, verbose = FALSE)
+  
+  features_mb <- SelectIntegrationFeatures(object.list = mesenchyme_blasula, nfeatures = 2000)
+  mesenchyme_blastula <- PrepSCTIntegration(object.list = mesenchyme_blasula, anchor.features = features_mb, verbose = FALSE)
+  
+  features_eg <- SelectIntegrationFeatures(object.list = early_gastrula, nfeatures = 2000)
+  early_gastrula <- PrepSCTIntegration(object.list = early_gastrula , anchor.features = features_eg, verbose = FALSE)
+  
+  features_lg <- SelectIntegrationFeatures(object.list = late_gastrula, nfeatures = 2000)
+  late_gastrula <- PrepSCTIntegration(object.list = late_gastrula , anchor.features = features_lg, verbose = FALSE)
+
+  
+  #Finding anchors for integration
+  
+  
+  anchors_hb <- FindIntegrationAnchors(object.list = hatched_blastula, normalization.method = "SCT", 
+  anchor.features = features_hb, verbose = FALSE)
+  
+  anchors_mb <- FindIntegrationAnchors(object.list = mesenchyme_blastula, normalization.method = "SCT", 
+  anchor.features = features_mb, verbose = FALSE)
+  
+  anchors_eg <- FindIntegrationAnchors(object.list = early_gastrula, normalization.method = "SCT", 
+  anchor.features = features_eg, verbose = FALSE)
+  
+  anchors_lg <- FindIntegrationAnchors(object.list = late_gastrula, normalization.method = "SCT", 
+  anchor.features = features_lg, verbose = FALSE)
+  
+  #Integration
+  
+  seu_hatched_blastula <- IntegrateData(anchorset = anchors_hb, normalization.method = "SCT", 
+      verbose = TRUE)
+  
+  seu_mesenchyme_blastula <- IntegrateData(anchorset = anchors_mb, normalization.method = "SCT", 
+      verbose = TRUE)
+  
+  seu_early_gastrula <- IntegrateData(anchorset = anchors_eg, normalization.method = "SCT", 
+      verbose = TRUE)
+
+  seu_late_gastrula <- IntegrateData(anchorset = anchors_lg, normalization.method = "SCT", 
+      verbose = TRUE)
+  
+  save(seu_64, seu_morula, seu_early_blastula, seu_hatched_blastula, seu_mesenchyme_blastula,
+       seu_early_gastrula, seu_late_gastrula, file = "seurat_stages.Rdata")
+}else{
+  load("seurat_stages.Rdata")
+}
+```
+
+```{r 64_cells, cache=TRUE}
+seu_64 <- RunPCA(seu_64, verbose = FALSE)
+ElbowPlot(seu_64, ndims = 80)
+seu_64 <- RunTSNE(seu_64, dims=1:10)
+DimPlot(seu_64, reduction = "tsne") + 
+  NoLegend()
+
+#UMAP
+seu_64 <- RunUMAP(seu_64, dims=1:20)
+
+#Markers
+seu_64 <- FindNeighbors(seu_64, dims = 1:40, verbose = FALSE)
+seu_64 <- FindClusters(seu_64, resolution=0.6, verbose = FALSE)
+
+
+TSNE_64 <- DimPlot(seu_64, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_64 <- DimPlot(seu_64, reduction = "umap", label = TRUE) + NoLegend()
+
+pos_64_markers <- FindAllMarkers(seu_64, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+all_64_markers <- FindAllMarkers(seu_64, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+
+good_64_Markers <- pos_64_markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+good_64_Markers[1:5]
+
+
+#Highly variable genes
+seu_64 <- FindVariableFeatures(seu_64, nfeatures = 3000)
+top10_variable_64 <- head(VariableFeatures(seu_64), 10)
+
+#make_plots(seu_64, "Genes_pics/1_64_cells/", top10_variable_64, good_64_Markers)
+```
+
+```{r morula, cache=TRUE}
+seu_morula <- RunPCA(seu_morula, verbose = FALSE)
+ElbowPlot(seu_morula, ndims = 80)
+seu_morula <- RunTSNE(seu_morula, dims=1:10)
+DimPlot(seu_morula, reduction = "tsne") + 
+  NoLegend()
+
+#UMAP
+seu_morula <- RunUMAP(seu_morula, dims=1:20)
+
+#Markers
+seu_morula <- FindNeighbors(seu_morula, dims = 1:40, verbose = FALSE)
+seu_morula <- FindClusters(seu_morula, resolution=0.6, verbose = FALSE)
+TSNE_morula <- DimPlot(seu_morula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_morula <- DimPlot(seu_morula, reduction = "umap", label = TRUE) + NoLegend()
+
+pos_morula_Markers <- FindAllMarkers(seu_morula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+all_morula_Markers <- FindAllMarkers(seu_morula, max.cells.per.ident = 100, test.use = "MAST", only.pos = F)
+good_morula_Markers <- pos_morula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+good_morula_Markers[1:5]
+
+#Highly variable genes
+seu_morula <- FindVariableFeatures(seu_morula, nfeatures = 3000)
+top10_variable_morula <- head(VariableFeatures(seu_morula), 10)
+top10_variable_morula
+
+#make_plots(seu_morula, "Genes_pics/2_morula", top10_variable_morula, good_morula_Markers)
+```
+
+```{r early blastula, eval=FALSE}
+
+#This stage could be failed...
+seu_early_blastula <- RunPCA(seu_early_blastula, verbose = FALSE)
+ElbowPlot(seu_early_blastula, ndims = 80)
+
+seu_early_blastula <- RunTSNE(seu_early_blastula, dims=1:40)
+DimPlot(seu_early_blastula, reduction = "tsne") + 
+  NoLegend()
+
+#UMAP
+seu_early_blastula <- RunUMAP(seu_early_blastula, dims=1:40)
+
+#Markers
+seu_early_blastula <- FindNeighbors(seu_early_blastula, dims = 1:40, verbose = FALSE)
+seu_early_blastula <- FindClusters(seu_early_blastula, resolution=0.6, verbose = FALSE)
+TSNE_early_blastula <- DimPlot(seu_early_blastula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_early_blastula <- DimPlot(seu_early_blastula, reduction = "umap", label = TRUE) + NoLegend()
+
+all_e_blastula_Markers <- FindAllMarkers(seu_early_blastula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+good_e_blastula_Markers <- all_e_blastula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+good_e_blastula_Markers[1:5]
+
+#FeaturePlot(seu_early_blastula, good_e_blastula_Markers[1:5], cols=c("blue", "red"), reduction="umap", ncol=3)
+#VlnPlot(seu_early_blastula, good_e_blastula_Markers[1:5], pt.size = 0.01)
+
+#Highly variable genes
+seu_early_blastula <- FindVariableFeatures(seu_early_blastula, nfeatures = 3000)
+top10_variable_e_blastula <- head(VariableFeatures(seu_early_blastula), 10)
+top10_variable_e_blastula
+fp <- FeaturePlot(seu_early_blastula, top10_variable_e_blastula, cols = c("blue", "red"), reduction="umap", ncol=3, interactive = F)
+fp
+ggsave("top10_variable_e_blastula.png", plot = fp, dpi = 300)
+
+
+VFP_e_blastula <- VariableFeaturePlot(seu_early_blastula, log = FALSE)
+
+LabelPoints(plot = plot1, points = top10_variable_e_blastula, repel = TRUE)
+tr2g[transcript %in% top10_variable_e_blastula, info]
+```
+
+```{r hatched blastula, cache=TRUE}
+seu_hatched_blastula <- RunPCA(seu_hatched_blastula, verbose = FALSE)
+ElbowPlot(seu_hatched_blastula, ndims = 80)
+
+seu_hatched_blastula <- RunTSNE(seu_hatched_blastula, dims=1:20)
+
+#UMAP
+seu_hatched_blastula <- RunUMAP(seu_hatched_blastula, dims=1:20)
+
+#Markers
+seu_hatched_blastula <- FindNeighbors(seu_hatched_blastula, dims = 1:40, verbose = FALSE)
+seu_hatched_blastula <- FindClusters(seu_hatched_blastula, resolution=0.6, verbose = FALSE)
+TSNE_hatched_blastula <- DimPlot(seu_hatched_blastula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_hatched_blastula <- DimPlot(seu_hatched_blastula, reduction = "umap", label = TRUE) + NoLegend()
+
+all_hatch_blastula_Markers <- FindAllMarkers(seu_hatched_blastula, max.cells.per.ident = 100, test.use = "MAST", only.pos = F)
+pos_hatch_blastula_Markers <- FindAllMarkers(seu_hatched_blastula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+
+good_hatch_blastula_Markers <- pos_hatch_blastula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+
+#Highly variable genes
+seu_hatched_blastula <- FindVariableFeatures(seu_hatched_blastula, nfeatures = 3000)
+top10_variable_hatch_blastula <- head(VariableFeatures(seu_hatched_blastula), 10)
+
+make_plots(seu_hatched_blastula, "Genes_pics/4_hatched_blastula/", 
+           top10_variable_hatch_blastula, good_hatch_blastula_Markers)
+
+```
+
+```{r mesenchyme blastula, cache=TRUE}
+seu_mesenchyme_blastula <- RunPCA(seu_mesenchyme_blastula, verbose = FALSE)
+ElbowPlot(seu_mesenchyme_blastula, ndims = 50)
+
+seu_mesenchyme_blastula <- RunTSNE(seu_mesenchyme_blastula, dims=1:20)
+
+#UMAP
+seu_mesenchyme_blastula <- RunUMAP(seu_mesenchyme_blastula, dims=1:20)
+
+DimPlot(seu_mesenchyme_blastula, reduction = "umap") + 
+  NoLegend()
+
+#Markers
+seu_mesenchyme_blastula <- FindNeighbors(seu_mesenchyme_blastula, dims = 1:40, verbose = FALSE)
+seu_mesenchyme_blastula <- FindClusters(seu_mesenchyme_blastula, resolution=0.6, verbose = FALSE)
+
+TSNE_mesenchyme_blastula <- DimPlot(seu_mesenchyme_blastula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_mesenchyme_blastula <- DimPlot(seu_mesenchyme_blastula, reduction = "umap", label = TRUE) + NoLegend()
+
+pos_mesenchyme_blastula_Markers <- FindAllMarkers(seu_mesenchyme_blastula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+all_mesenchyme_blastula_Markers <- FindAllMarkers(seu_mesenchyme_blastula, max.cells.per.ident = 100, test.use = "MAST", only.pos = F)
+good_mesenchyme_blastula_Markers <- pos_mesenchyme_blastula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+
+#Highly variable genes
+seu_mesenchyme_blastula <- FindVariableFeatures(seu_mesenchyme_blastula, nfeatures = 3000)
+top10_variable_mesenchyme_blastula <- head(VariableFeatures(seu_mesenchyme_blastula), 10)
+
+make_plots(seu_mesenchyme_blastula, "Genes_pics/5_mesenchyme_blastula/", 
+           top10_variable_mesenchyme_blastula, good_mesenchyme_blastula_Markers)
+```
+
+```{r early gastrula, cache=TRUE}
+seu_early_gastrula <- RunPCA(seu_early_gastrula, verbose = FALSE)
+ElbowPlot(seu_early_gastrula, ndims = 80)
+
+seu_early_gastrula <- RunTSNE(seu_early_gastrula, dims=1:20)
+
+#UMAP
+seu_early_gastrula <- RunUMAP(seu_early_gastrula, dims=1:20)
+
+#Markers
+seu_early_gastrula <- FindNeighbors(seu_early_gastrula, dims = 1:40, verbose = FALSE)
+seu_early_gastrula <- FindClusters(seu_early_gastrula, resolution=0.6, verbose = FALSE)
+TSNE_early_gatrula <- DimPlot(seu_early_gastrula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_early_gatrula <- DimPlot(seu_early_gastrula, reduction = "umap", label = TRUE) + NoLegend()
+
+all_early_gastrula_Markers <- FindAllMarkers(seu_early_gastrula, max.cells.per.ident = 100, test.use = "MAST", only.pos = F)
+pos_early_gastrula_Markers <- FindAllMarkers(seu_early_gastrula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+good_early_gastrula_Markers <- pos_early_gastrula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+
+#Highly variable genes
+seu_early_gastrula <- FindVariableFeatures(seu_early_gastrula, nfeatures = 3000)
+top10_variable_early_gastrula <- head(VariableFeatures(seu_early_gastrula), 10)
+
+make_plots(seu_early_gastrula, "Genes_pics/6_early_gastrula/", 
+           top10_variable_early_gastrula, good_early_gastrula_Markers)
+```
+
+```{r late gastrula, cache=TRUE}
+seu_late_gastrula <- RunPCA(seu_late_gastrula, verbose = FALSE)
+ElbowPlot(seu_late_gastrula, ndims = 80)
+
+
+seu_late_gastrula <- RunTSNE(seu_late_gastrula, dims=1:20)
+
+#UMAP
+seu_late_gastrula <- RunUMAP(seu_late_gastrula, dims=1:20)
+
+DimPlot(seu_late_gastrula, reduction = "umap") + 
+  NoLegend()
+
+#Markers
+seu_late_gastrula <- FindNeighbors(seu_late_gastrula, dims = 1:40, verbose = FALSE)
+seu_late_gastrula <- FindClusters(seu_late_gastrula, resolution=0.6, verbose = FALSE)
+TSNE_late_gatrula <- DimPlot(seu_late_gastrula, reduction = "tsne", label = TRUE) + NoLegend()
+UMAP_late_gatrula <- DimPlot(seu_late_gastrula, reduction = "umap", label = TRUE) + NoLegend()
+
+
+
+all_late_gastrula_Markers <- FindAllMarkers(seu_late_gastrula, max.cells.per.ident = 100, test.use = "MAST", only.pos = F)
+pos_late_gastrula_Markers <- FindAllMarkers(seu_late_gastrula, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+good_late_gastrula_Markers <- pos_late_gastrula_Markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+
+#Highly variable genes
+seu_late_gastrula <- FindVariableFeatures(seu_late_gastrula, nfeatures = 3000)
+top10_variable_late_gastrula <- head(VariableFeatures(seu_late_gastrula), 10)
+
+make_plots(seu_late_gastrula, "Genes_pics/7_late_gastrula/", 
+           top10_variable_late_gastrula, good_late_gastrula_Markers)
+```
+
+```{r beautiful plots}
+ggsave("TSNE_64_cells.png", plot = TSNE_64, dpi = "retina")
+ggsave("UMAP_64_cells.png", plot = UMAP_64 , dpi = "retina")
+
+ggsave("TSNE_morula.png", plot = TSNE_morula, dpi = "retina")
+ggsave("UMAP_morula.png", plot = UMAP_morula, dpi = "retina")
+
+ggsave("TSNE_early_blastula.png", plot = TSNE_early_blastula, dpi = "retina")
+ggsave("UMAP_early_blastula.png", plot = UMAP_early_blastula, dpi = "retina")
+
+ggsave("TSNE_mesenchyme_blastula.png", plot = TSNE_mesenchyme_blastula, dpi = "retina")
+ggsave("UMAP_mesenchyme_blastula.png", plot = UMAP_mesenchyme_blastula, dpi = "retina")
+
+ggsave("TSNE_hatched_blastula.png", plot = TSNE_hatched_blastula, dpi = "retina")
+ggsave("UMAP_hatched_blastula.png", plot = UMAP_hatched_blastula, dpi = "retina")
+
+ggsave("TSNE_early_gatrula.png", plot = TSNE_early_gatrula, dpi = "retina")
+ggsave("UMAP_early_gatrula.png", plot = UMAP_early_gatrula, dpi = "retina")
+
+ggsave("TSNE_late_gatrula.png", plot = TSNE_late_gatrula, dpi = "retina")
+ggsave("UMAP_late_gatrula.png", plot = UMAP_late_gatrula, dpi = "retina")
+```
+
+```{r beautiful tables}
+library(DT)
+
+tr2g$transcript <- sub("_", "-", tr2g$transcript)
+
+
+setDT(all_64_markers)
+out_64_markers <- merge(tr2g, all_64_markers, by.x = "transcript", by.y = "gene")
+out_64_markers$good_marker <- F
+out_64_markers[transcript %in% good_64_Markers, good_marker := T]
+fwrite(out_64_markers, "Gene_markers/1_64_cells.tsv",  sep = "\t")
+result <- datatable(out_64_markers)
+htmlwidgets::saveWidget(result, "Gene_markers/1_64_cells.html")
+
+
+setDT(all_morula_Markers)
+out_morula_markers <- merge(tr2g, all_morula_Markers, by.x = "transcript", by.y = "gene")
+out_morula_markers$good_marker <- F
+out_morula_markers[transcript %in% good_morula_Markers, good_marker := T]
+fwrite(out_morula_markers, "Gene_markers/2_morula.tsv", sep = "\t")
+result <- datatable(out_morula_markers)
+htmlwidgets::saveWidget(result, "Gene_markers/2_morula.html")
+
+
+# setDT(all_e_blastula_Markers)
+# out_e_blastula_markers <- merge(tr2g, all_e_blastula_Markers, by.x = "transcript", by.y = "gene")
+# out_e_blastula_markers$good_marker <- F
+# out_e_blastula_markers[transcript %in% good_e_blastula_Markers, good_marker := T]
+# result <- datatable(out_e_blastula_markers)
+# htmlwidgets::saveWidget(result, "Gene_markers/3_e_blastula.html")
+
+setDT(all_hatch_blastula_Markers)
+out_hatched_blastula_markers <- merge(tr2g, all_hatch_blastula_Markers, by.x = "transcript", by.y = "gene")
+out_hatched_blastula_markers$good_marker <- F
+out_hatched_blastula_markers[transcript %in% good_hatch_blastula_Markers, good_marker := T]
+fwrite(out_hatched_blastula_markers, "Gene_markers/4_hatched_blastula.tsv", sep = "\t")
+result <- datatable(out_hatched_blastula_markers)
+htmlwidgets::saveWidget(result, "Gene_markers/4_hatched_blastula.html")
+
+setDT(all_mesenchyme_blastula_Markers)
+out_mesenchyme_blastula_markers <- merge(tr2g, all_mesenchyme_blastula_Markers, by.x = "transcript", by.y = "gene")
+out_mesenchyme_blastula_markers$good_marker <- F
+out_mesenchyme_blastula_markers[transcript %in% good_mesenchyme_blastula_Markers, good_marker := T]
+fwrite(out_mesenchyme_blastula_markers, "Gene_markers/5_mesenchyme_blastula.tsv", sep = "\t")
+result <- datatable(out_mesenchyme_blastula_markers)
+htmlwidgets::saveWidget(result, "Gene_markers/5_mesenchyme_blastula.html")
+
+setDT(all_early_gastrula_Markers)
+out_early_gastrula_Markers <- merge(tr2g, all_early_gastrula_Markers, by.x = "transcript", by.y = "gene")
+out_early_gastrula_Markers$good_marker <- F
+out_early_gastrula_Markers[transcript %in% good_early_gastrula_Markers, good_marker := T]
+fwrite(out_early_gastrula_Markers, "Gene_markers/6_early_gastrula.tsv", sep = "\t")
+result <- datatable(out_early_gastrula_Markers)
+htmlwidgets::saveWidget(result, "Gene_markers/6_early_gastrula.html")
+
+setDT(all_late_gastrula_Markers)
+out_late_gastrula_Markers <- merge(tr2g, all_late_gastrula_Markers, by.x = "transcript", by.y = "gene")
+out_late_gastrula_Markers$good_marker <- F
+out_late_gastrula_Markers[transcript %in% good_late_gastrula_Markers, good_marker := T]
+fwrite(out_late_gastrula_Markers, "Gene_markers/7_late_gastrula.tsv", sep = "\t")
+result <- datatable(out_late_gastrula_Markers)
+htmlwidgets::saveWidget(result, "Gene_markers/7_late_gastrula.html")
+```
+
+```{r markers from paper, eval=FALSE}
+paper_markers <- c("SoxB2", "Foxq2", "NK2.1", "AnkAT-1", "FoxA", "Endo16",
+                   "Alx1", "SM50", "SM37", "cyclin B", "Nanos2", "vasa", 
+                    "seawi", "SoxC", "FoxY", "Blimp1")
+
+paper_markers <- tr2g[gene_name %in% paper_markers, transcript]
+
+#Dotplots 
+dp <- DotPlot(seu_64, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+  ggsave(file = "Paper_markers/1_64_cells_DP.png", plot = dp, dpi = 320)
+
+dp <- DotPlot(seu_morula, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+  ggsave(file = "Paper_markers/2_morula_DP.png", plot = dp, dpi = 320)
+
+dp <- DotPlot(seu_hatched_blastula, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+  ggsave(file = "Paper_markers/4_hatched_blastula_DP.png", plot = dp, dpi = 320)
+
+dp <- DotPlot(seu_mesenchyme_blastula, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+  ggsave(file = "Paper_markers/5_mesenchyme_blastula_DP.png", plot = dp, dpi = 320)
+ 
+dp <- DotPlot(seu_early_gastrula, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+  ggsave(file = "Paper_markers/6_early_gastrula_DP.png", plot = dp, dpi = 320)
+
+dp <- DotPlot(seu_late_gastrula, assay = "RNA", features = paper_markers, cols = c("blue", "red")) +
+  coord_flip()
+ggsave(file = "Paper_markers/7_late_gastrula_DP.png", plot = dp, dpi = 320)
+
+
+#Feature plots
+
+fp <- FeaturePlot(seu_64, paper_markers, cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5, slot = "scale.data",
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+for (i in fp){
+    plot_name <- paste("Paper_markers/1_64_cells_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+  } 
+
+fp <- FeaturePlot(seu_morula, paper_markers, cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5, slot = "scale.data",
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+for (i in fp){
+    plot_name <- paste("Paper_markers/2_morula_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+  } 
+
+fp <- FeaturePlot(seu_hatched_blastula, paper_markers, cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5, slot = "scale.data",
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+
+for (i in fp){
+    plot_name <- paste("Paper_markers/4_hatched_blastula_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+  } 
+
+fp <- FeaturePlot(seu_mesenchyme_blastula, paper_markers, cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5, slot = "scale.data",
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+
+for (i in fp){
+    plot_name <- paste("Paper_markers/5_mesenchyme_blastula_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+  } 
+
+fp <- FeaturePlot(seu_early_gastrula, paper_markers, cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5, slot = "scale.data",
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+
+for (i in fp){
+    plot_name <- paste("Paper_markers/6_early_gastrula_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+  } 
+
+fp <- FeaturePlot(seu_late_gastrula, paper_markers, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, ncol = 5,
+                    keep.scale = "all", repel = T,  label = T, 
+                    interactive = F, combine = F, coord.fixed = T)
+
+for (i in fp){
+    print (i)  
+    plot_name <- paste("Paper_markers/7_late_gastrula_FP_", i$labels$title, ".png", sep = "")
+    ggsave(filename = plot_name, plot = i, device = "png", dpi = 320)
+} 
+```
+
+```{r, eval=FALSE}
+#Lets plot all of the repeats from all_Markers
+setDT(all_64_markers)
+setDT(all_morula_Markers)
+setDT(all_hatch_blastula_Markers)
+setDT(all_mesenchyme_blastula_Markers)
+setDT(all_early_gastrula_Markers)
+setDT(all_late_gastrula_Markers)
+markers_repeats <- all_64_markers[grepl(pattern = "rnd.*", x = all_64_markers$gene, perl = T), gene]
+markers_repeats <- c(markers_repeats, 
+  all_morula_Markers[grepl(pattern = "rnd.*", x = all_morula_Markers$gene, perl = T), gene],
+  #all_e_blastula_Markers[grepl(pattern = "rnd.*", x = all_e_blastula_Markers$gene, perl = T), gene],
+  all_hatch_blastula_Markers[grepl(pattern = "rnd.*", x = all_hatch_blastula_Markers$gene, perl = T), gene],
+  all_mesenchyme_blastula_Markers[grepl(pattern = "rnd.*", x = all_mesenchyme_blastula_Markers$gene, perl = T), gene],
+  all_early_gastrula_Markers[grepl(pattern = "rnd.*", x = all_early_gastrula_Markers$gene, perl = T), gene], 
+  all_late_gastrula_Markers[grepl(pattern = "rnd.*", x = all_late_gastrula_Markers$gene, perl = T), gene])
+markers_repeats <- unique(markers_repeats)
+
+library(ggpubr)
+
+for (i in markers_repeats){
+  cell_64 <-  morula <- hatched <- mesenchyme <- early_g <- late_g <- NULL
+  
+  tryCatch(
+  cell_64 <- FeaturePlot(seu_64, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){cell_64 <- ggplot() + geom_blank()})
+  
+  cell_64$labels$title <- ""
+  
+  tryCatch(
+  morula <- FeaturePlot(seu_morula, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){morula <- ggplot() + geom_blank()})
+  morula$labels$title <- ""
+  
+  # early_blastula <- FeaturePlot(seu_early_blastula, i, slot = "scale.data", cols = c("blue", "red"),
+  #                   reduction="umap", order = T, label = T, repel = T,
+  #                   interactive = F, combine = F)
+  
+  tryCatch(
+  hatched <- FeaturePlot(seu_hatched_blastula, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){hatched <- ggplot() + geom_blank()})
+  hatched$labels$title <- ""
+  
+  tryCatch(
+  mesenchyme <- FeaturePlot(seu_mesenchyme_blastula, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){mesenchyme <- ggplot() + geom_blank()})
+  mesenchyme$labels$title <- ""
+  
+  tryCatch(
+  early_g <-  FeaturePlot(seu_early_gastrula, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){early_g <- ggplot() + geom_blank()})
+  early_g$labels$title <- ""
+  
+  tryCatch(
+  late_g <-  FeaturePlot(seu_late_gastrula, i, slot = "scale.data", cols = c("blue", "red"),
+                    reduction="umap", order = T, label = T, repel = T,
+                    interactive = F, combine = F)[[1]], error=function(e){late_g <- ggplot() + geom_blank()})
+  late_g$labels$title <- ""
+  result <- ggarrange(cell_64, morula, hatched, mesenchyme, early_g, late_g,
+                    labels = c("64 cells", "morula", "hatched_blatula",
+                               "mesenchyme_blastula", "early_gastrula", "late_gastrula"),
+                    ncol = 2, nrow = 3)
+  
+  result <- annotate_figure(result, top = text_grob(i, color = "black", face = "bold", size = 14),)
+  
+  plot_name <- paste("Repeats_markers/", sub("\\(.*", ".png", i), sep = "")
+  ggexport(result, filename = plot_name, width = 800, height = 800)
+}
+```
+
+```{r formatting_markers_tables}
+
+all_64_markers$Stage <- "1_64_cells"
+all_morula_Markers$Stage <- "2_Morula"
+#all_e_blastula_Markers <- "3_e_Blastula"
+all_hatch_blastula_Markers$Stage <- "4_Hatched_Blastula"
+all_mesenchyme_blastula_Markers$Stage <- "5_Mesenchyme_Blastula"
+all_early_gastrula_Markers$Stage <- "6_Early_Gastrula"
+all_late_gastrula_Markers$Stage <- "6_Late_Gastrula"
+
+all_markers <- rbind(all_64_markers, all_morula_Markers, 
+                 #all_e_blastula_Markers,
+                all_hatch_blastula_Markers,
+                 all_mesenchyme_blastula_Markers, 
+                 all_early_gastrula_Markers,
+                 all_late_gastrula_Markers)
+
+all_markers <- merge.data.table(tr2g, all_markers, by.x = "transcript", by.y = "gene", all.y = T)
+all_markers <- all_markers[mito == "no"]
+all_markers$mito <- NULL
+all_markers <- all_markers[p_val_adj < 0.05]
+
+all_markers <- all_markers[!grepl("ribosomal", info)]
+fwrite(all_markers, "Gene_markers/all_markers.tsv", sep = "\t")
+```
+
+```{r saving seu_objects with clusters}
+save(seu_64, seu_morula,
+     seu_hatched_blastula,
+     seu_mesenchyme_blastula,
+     seu_early_gastrula, 
+     seu_late_gastrula,
+     file = "seurat_stages_сlusters.Rdata")
+```
+
+
+

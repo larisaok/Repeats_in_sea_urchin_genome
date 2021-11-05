@@ -1,0 +1,157 @@
+---
+title: "SC_together.Rmd"
+author: "Nick_Panyushev"
+date: "4/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#BiocManager::install(c('multtest', "DropletUtils"), Ncpus = 7)
+#BiocManager::install("MAST", Ncpus = 7)
+#install.packages("irlba")
+#install.packages("scico")
+#install.packages("Seurat")
+#install.packages("DropletUtils")
+#install.packages("tidyverse")
+#install.packages("ggpointdensity")
+#install.packages("scales")
+#install.packages("hexbin")
+
+setwd("~/Urchin_projects/Spur_single-cell/")
+library(hexbin)
+library(stringr)
+library(Matrix)
+library(irlba)
+library(scico)
+library(Seurat)
+library(DropletUtils)
+library(tidyverse)
+library(ggpointdensity)
+library(scales)
+library(MAST)
+theme_set(theme_bw())
+source("SC_functions.R")
+```
+
+
+```{r SCTransform}
+if (!file.exists("Seurat_tranformed.RData")){
+  seu_64 <- SCTransform(seu_64, conserve.memory = T, verbose = TRUE)
+seu_morula <- SCTransform(seu_morula, conserve.memory = T, verbose = TRUE)
+seu_early_blastula <- SCTransform(seu_early_blastula, conserve.memory = T, verbose = TRUE)
+gc()
+seu_hatched_blastula_1 <- SCTransform(seu_hatched_blastula_1, conserve.memory = T, verbose = TRUE)
+gc()
+seu_hatched_blastula_2 <- SCTransform(seu_hatched_blastula_2, conserve.memory = T, verbose = TRUE)
+gc()
+seu_early_gastrula_1 <- SCTransform(seu_early_gastrula_1, conserve.memory = T, verbose = TRUE)
+gc()
+seu_early_gastrula_2 <- SCTransform(seu_early_gastrula_2, conserve.memory = T, verbose = TRUE)
+
+seu_mesenchyme_blastula_1 <- SCTransform(seu_mesenchyme_blastula_1, conserve.memory = T, verbose = TRUE)
+gc()
+seu_mesenchyme_blastula_2 <- SCTransform(seu_mesenchyme_blastula_2, conserve.memory = T, verbose = TRUE)
+gc()
+seu_late_gastrula_1 <- SCTransform(seu_late_gastrula_1, conserve.memory = T, verbose = TRUE)
+gc()
+seu_late_gastrula_2 <- SCTransform(seu_late_gastrula_2, conserve.memory = T, verbose = TRUE)
+gc()
+
+save(seu_64, seu_morula,
+     seu_early_blastula,
+     seu_hatched_blastula_1, seu_hatched_blastula_2, 
+     seu_mesenchyme_blastula_1, seu_mesenchyme_blastula_2, 
+     seu_early_gastrula_1, seu_early_gastrula_2, 
+     seu_late_gastrula_1, seu_late_gastrula_2,
+     file = "Seurat_tranformed.RData")
+}else{
+  load("Seurat_tranformed.RData")
+}
+```
+
+```{r set stages}
+seu_64$stage <- "64_cells"
+seu_morula$stage <- "morula"
+seu_early_blastula$stage <- "early_blastula"
+seu_hatched_blastula_1$stage <- "hatched_blastula"
+seu_hatched_blastula_2$stage <- "hatched_blastula"
+seu_early_gastrula_1$stage <- "early_gastrula"
+seu_early_gastrula_2$stage <- "early_gastrula"
+seu_mesenchyme_blastula_1$stage <- "mesenchyme_blastula"
+seu_mesenchyme_blastula_2$stage <- "mesenchyme_blastula"
+seu_late_gastrula_1$stage <- "late_gastrula"
+seu_late_gastrula_2$stage <- "late_gastrula"
+```
+
+```{r joining datasets}
+if(!file.exists("seurat_all.Rdata")){
+  obj.list <- list(seu_64,
+                 seu_morula,
+                 seu_early_blastula,
+                 seu_hatched_blastula_1,
+                 seu_hatched_blastula_2,
+                 seu_mesenchyme_blastula_1,
+                 seu_mesenchyme_blastula_2,
+                 seu_early_gastrula_1,
+                 seu_early_gastrula_2, 
+                 seu_late_gastrula_1,
+                 seu_late_gastrula_2) 
+
+  options(future.globals.maxSize= 8589934592)
+  features <- SelectIntegrationFeatures(object.list = obj.list, nfeatures = 2000)
+  obj.list <- PrepSCTIntegration(object.list = obj.list, anchor.features = features, verbose = FALSE)
+
+  if (!file.exists("anchors.RData")){
+    anchors <- FindIntegrationAnchors(object.list = obj.list, normalization.method = "SCT", 
+    anchor.features = features, verbose = FALSE)
+    save(anchors, file = "anchors.RData")
+  }else{
+    load("anchors.RData")
+  }
+  seurat_joined <- IntegrateData(anchorset = anchors, normalization.method = "SCT", 
+      verbose = TRUE)
+  save(seurat_joined, file = "seurat_all.Rdata")
+}else{
+  load("seurat_all.Rdata")
+}
+```
+
+```{r PCA}
+seurat_joined <- RunPCA(seurat_joined, verbose = FALSE)
+ElbowPlot(seurat_joined, ndims = 80)
+seurat_joined <- RunTSNE(seurat_joined, dims=1:20)
+DimPlot(seurat_joined, reduction = "tsne") + 
+  NoLegend()
+```
+
+```{r UMAP}
+seurat_joined <- RunUMAP(seurat_joined, dims=1:20)
+DimPlot(seurat_joined, reduction = "umap") + NoLegend()
+DimPlot(seurat_joined, reduction = "umap", label = TRUE, split.by = "stage")
+```
+
+```{r Markers}
+seurat_joined <- FindNeighbors(seurat_joined, dims = 1:40, verbose = FALSE)
+seurat_joined <- FindClusters(seurat_joined, resolution=0.6, verbose = FALSE)
+DimPlot(seurat_joined, reduction = "tsne", label = TRUE, split.by = "stage") + NoLegend()
+DimPlot(seurat_joined, reduction = "umap", label = TRUE) + NoLegend()
+
+allMarkers <- FindAllMarkers(seurat_joined, max.cells.per.ident = 100, test.use = "MAST", only.pos = T)
+goodMarkers <- allMarkers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC) %>% pull(gene)
+goodMarkers[1:3]
+
+FeaturePlot(seurat_joined, goodMarkers[1:3], cols=c("blue", "red"), reduction="umap", ncol=3)
+VlnPlot(seurat_joined, goodMarkers[1:3], pt.size = 0.01)
+```
+
+```{r Highly variable genes}
+seurat_joined <- FindVariableFeatures(seurat_joined, nfeatures = 3000)
+top10_variable <- head(VariableFeatures(seurat_joined), 10)
+fp <- FeaturePlot(seurat_joined, top10_variable[9], cols = c("blue", "red"), reduction="umap", ncol=3, interactive = T)
+fp
+#plot1 <- VariableFeaturePlot(seurat_joined, log = FALSE)
+#LabelPoints(plot = plot1, points = top10_variable, repel = TRUE)
+#print(tr2g[gene_var %in% top10, info])
+save(seurat_joined, file = "Seurat_processed.Rdata")
+load("Seurat_processed.Rdata")
+top10_variable

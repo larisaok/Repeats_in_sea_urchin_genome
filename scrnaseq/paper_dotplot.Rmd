@@ -1,0 +1,78 @@
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(Seurat)
+library(RColorBrewer)
+options(future.globals.maxSize = 4000 * 1024^2)
+```
+
+```{r}
+setwd(dir = "~/Urchin_projects/Spur_single-cell/")
+source("paper_dotplot_data_prep.R")
+load(file="seurat_stages_сlusters.Rdata")
+```
+
+```{r preparing data}
+markers <- fread("Genes_for_figure.tsv", sep = "\t", header = F)
+DP_64 <- get_plot_data(seu_64, markers, "64_cells")
+DP_morula <- get_plot_data(seu_morula, markers, "Morula")
+DP_HB <- get_plot_data(seu_hatched_blastula, markers, "Hatched_blastula")
+DP_MB <- get_plot_data(seu_mesenchyme_blastula, markers, "Mesenchyme_blastula")
+DP_EG <- get_plot_data(seu_early_gastrula, markers, "Early_gastrula")
+DP_LG <- get_plot_data(seu_late_gastrula, markers, "Late_gastrula")
+# rm(seu_64, seu_morula, seu_hatched_blastula, 
+#    seu_mesenchyme_blastula, seu_early_gastrula, seu_late_gastrula)
+```
+
+```{r}
+cells_64_H1 <- FeaturePlot(seu_64, "NM-214549.1", slot = "scale.data", order = T, 
+            label.size = 7, repel = F, pt.size = 0.5, label = T,
+            cols = c(BlueAndRed()), combine = F)
+
+cells_64_H1 <- cells_64_H1[[1]]
+cells_64_H1$labels$title <- "Histone H1 (NM_214549.1)"
+cells_64_H1
+
+ggsave("H1_Featureplot.png", cells_64_H1, device = "png", dpi = 700)
+```
+
+```{r alltogether_plot}
+all_together <- rbind.data.frame(DP_64, DP_morula, DP_HB, DP_MB, DP_EG, DP_LG)
+
+all_together$transcript <- factor(all_together$transcript,
+                                  levels = markers$V1)
+
+all_together$stage <- factor(all_together$stage, levels = c("Late_gastrula", "Early_gastrula", "Mesenchyme_blastula",
+                                                            "Hatched_blastula", "Morula", "64_cells"))
+
+all_together <- all_together[order(all_together$transcript)]
+
+plot_together <- ggplot(all_together, mapping = aes(x = transcript, y = cluster)) +
+        geom_point(aes(size = pct.exp, colour = log2(mean.exp))) +
+            scale_size_continuous(range = c(0.2, 3)) +
+        scale_color_gradient(low="blue", high='red', na.value = "white") + 
+  annotate("rect", xmin = 5.5, xmax = 14.5,
+                ymin = 0, ymax = Inf,
+                fill = "grey10", alpha = 0.2, color = NA) +
+  annotate("rect", xmin = 19.5, xmax = 24.5,
+                ymin = 0, ymax = Inf,
+                fill = "grey10", alpha = 0.2, color = NA) +
+  annotate("rect", xmin = 27.5, xmax = 35.5,
+                ymin = 0, ymax = Inf,
+                fill = "grey10", alpha = 0.2, color = NA) +
+  
+  theme_bw() +
+  theme(axis.title.x = element_blank(), 
+        axis.title.y = element_blank(),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  guides(size = guide_legend(title = "Percent Expressed")) + 
+        labs(x = "Features", y = "Cluster") + 
+  facet_grid(rows = vars(stage), scales = "free") 
+  
+plot_together
+```
+
+```{r}
+ggsave("Pic_for_paper_big_new.png", plot_together, dpi = 700, units = "mm", width = 210, height = 297)
+```

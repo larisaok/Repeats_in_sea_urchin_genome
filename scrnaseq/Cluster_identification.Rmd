@@ -1,0 +1,134 @@
+---
+title: "Lineage identification"
+author: "Nick Panyushev"
+date: "7/16/2021"
+output: html_document
+---
+
+```{r Installing dependencies, eval=FALSE}
+library(devtools)
+remotes::install_github(repo = 'satijalab/seurat', ref = 'master')
+```
+
+```{r loading_libraries}
+library(ggplot2)
+library(Seurat)
+library(tidyr)
+options(future.globals.maxSize= 8589934592)
+```
+
+```{r load object}
+setwd("~/Urchin_projects/Spur_single-cell/")
+load("seurat_stages_сlusters.Rdata")
+gc()
+```
+```{r}
+seu_64$stage <- "64_cells"
+seu_morula$stage <- "morula"
+seu_hatched_blastula$stage <- "hatched_blastula"
+seu_mesenchyme_blastula$stage <- "mesenchyme_blastula"
+seu_early_gastrula$stage <- "early_gastrula"
+seu_late_gastrula$stage <- "late_gastrula"
+```
+
+```{r 64+morula}
+morula_64 <- list(seu_64, seu_morula)
+features <- SelectIntegrationFeatures(object.list = morula_64)
+
+morula_64 <- lapply(X = morula_64, FUN = function(x) {
+    x <- ScaleData(x, features = features, verbose = FALSE)
+    x <- RunPCA(x, features = features, verbose = FALSE, approx = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = morula_64, reference = 2, reduction = "rpca",
+    dims = 1:50)
+
+cells_64_morula <- IntegrateData(anchorset = anchors, dims = 1:50, new.assay.name = "allstages")
+rm(morula_64, anchors)
+gc(full = T, verbose = F)
+
+cells_64_morula$seurat_clusters_separate <- cells_64_morula$seurat_clusters
+
+cells_64_morula <- ScaleData(cells_64_morula, verbose = FALSE)
+cells_64_morula <- RunPCA(cells_64_morula, verbose = FALSE, approx = FALSE)
+cells_64_morula <- RunUMAP(cells_64_morula, dims = 1:50)
+
+cells_64_morula <- FindNeighbors(cells_64_morula, dims = 1:40, verbose = FALSE)
+cells_64_morula <- FindClusters(cells_64_morula, resolution=0.6, verbose = FALSE)
+
+meta <-cells_64_morula@meta.data
+
+setDT(meta)
+cells_64_morula_lineage <- meta[, .(seurat_clusters, seurat_clusters_separate, stage)]
+cells_64_morula_lineage <- unique(cells_64_morula_lineage)
+
+
+data_wide <- pivot_wider(cells_64_morula_lineage, names_from = stage, values_from = seurat_clusters_separate)
+
+
+
+
+unique(seu_morula@meta.data$seurat_clusters)
+```
+
+
+
+
+
+
+```{r}
+l <- list(seu_hatched_blastula,
+                     seu_mesenchyme_blastula,
+                     seu_early_gastrula,
+                     seu_late_gastrula)
+
+
+features <- SelectIntegrationFeatures(object.list = All_together)
+
+All_together <- lapply(X = All_together, FUN = function(x) {
+    x <- ScaleData(x, features = features, verbose = FALSE)
+    x <- RunPCA(x, features = features, verbose = FALSE, approx = FALSE)
+})
+
+gc(full = T, verbose = F)
+```
+
+
+```{r}
+anchors <- FindIntegrationAnchors(object.list = All_together, reference = 4, reduction = "rpca",
+    dims = 1:50)
+
+gc(full = T, verbose = F)
+```
+
+
+```{r}
+All_integrated <- IntegrateData(anchorset = anchors, dims = 1:50, new.assay.name = "allstages")
+All_integrated@assays
+rm(All_together, anchors)
+gc(full = T, verbose = F)
+```
+
+
+```{r}
+All_integrated$seurat_clusters_separate <- All_integrated$seurat_clusters
+
+All_integrated <- ScaleData(All_integrated, verbose = FALSE)
+All_integrated <- RunPCA(All_integrated, verbose = FALSE, approx = FALSE)
+All_integrated <- RunUMAP(All_integrated, dims = 1:50)
+
+All_integrated <- FindNeighbors(All_integrated, dims = 1:40, verbose = FALSE)
+All_integrated <- FindClusters(All_integrated, resolution=0.6, verbose = FALSE)
+
+#DimPlot(All_integrated, split.by = "stage", group.by = "seurat_clusters", label = T)
+```
+
+
+```{r}
+meta <-All_integrated@meta.data
+setDT(meta)
+clusters_lineage <- meta[, .(seurat_clusters, seurat_clusters_separate, stage)]
+clusters_lineage <- unique(clusters_lineage)
+fwrite(clusters_lineage, "cluster_lineage.tsv", sep = "\t")
+```
+
